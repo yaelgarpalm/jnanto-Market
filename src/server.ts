@@ -707,9 +707,9 @@ app.post("/api/products/:id/stock", requireAuth, requireRoles(["producer", "coop
     if (!product) return res.status(404).json({ error: "Producto no encontrado." });
 
     const profileName = normalizePersonName(req.profile!.full_name);
+    const isOperationsRole = ["admin", "cooperative", "inventory_manager"].includes(req.profile!.role);
     const canUpdate =
-      req.profile!.role === "admin" ||
-      req.profile!.role === "producer" ||
+      isOperationsRole ||
       product.owner_id === req.user!.id ||
       product.producer_id === req.user!.id ||
       product.cooperative_id === req.profile!.cooperative_id ||
@@ -741,14 +741,11 @@ app.post("/api/products/:id/stock", requireAuth, requireRoles(["producer", "coop
   }
 });
 
-app.post("/api/products/:id/validate", requireAuth, requireRoles(["cooperative", "verifier", "admin"]), async (req: AuthedRequest, res, next) => {
+app.post("/api/products/:id/validate", requireAuth, requireRoles(["cooperative", "verifier", "inventory_manager", "admin"]), async (req: AuthedRequest, res, next) => {
   try {
     const { data: product, error: productError } = await supabase.from("products").select("*").eq("id", req.params.id).maybeSingle();
     if (productError) throw productError;
     if (!product) return res.status(404).json({ error: "Producto no encontrado." });
-    if (req.profile!.role !== "admin" && req.profile!.cooperative_id !== product.cooperative_id) {
-      return res.status(403).json({ error: "Solo la cooperativa del producto puede validarlo." });
-    }
     const { error } = await supabase.from("products").update({ status: "verified" }).eq("id", req.params.id);
     if (error) throw error;
     const stage = await insertTraceabilityStage({

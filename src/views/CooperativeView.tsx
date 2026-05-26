@@ -23,7 +23,7 @@ export default function CooperativeView({
   onFulfillment,
   onTrace,
 }: CooperativeViewProps) {
-  const isCoopOrStaff = Boolean(profile && ["cooperative", "admin"].includes(profile.role));
+  const isCoopOrStaff = Boolean(profile && ["cooperative", "verifier", "inventory_manager", "admin"].includes(profile.role));
   const pending = products.filter((item) => item.status === "pending");
   const paidOrders = orders.filter((order) => ["paid", "shipped", "delivered"].includes(order.status));
 
