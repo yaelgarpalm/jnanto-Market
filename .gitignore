@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+coverage/
+.vite/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Logs and local QA artifacts
+*.log
+qa-*.png
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

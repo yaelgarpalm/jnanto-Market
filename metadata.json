@@ -1,0 +1,6 @@
+{
+  "name": "Jñatjo Market",
+  "description": "Marketplace digital para la comercialización justa y trazable de productos mazahuas con trazabilidad blockchain y comunidad.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
