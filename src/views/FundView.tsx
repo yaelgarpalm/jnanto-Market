@@ -7,9 +7,10 @@ interface FundViewProps {
   movements: CommunityFundMovement[];
   canManage: boolean;
   onExpense: (event: FormEvent<HTMLFormElement>) => void;
+  onConfirmExpense: (movementId: string) => void;
 }
 
-export default function FundView({ balance, movements, canManage, onExpense }: FundViewProps) {
+export default function FundView({ balance, movements, canManage, onExpense, onConfirmExpense }: FundViewProps) {
   return (
     <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
       <div className="rounded-2xl border border-[#E6E2DA] bg-white p-5 shadow-xs">
@@ -39,10 +40,30 @@ export default function FundView({ balance, movements, canManage, onExpense }: F
             movements.map((movement) => (
               <div key={movement.id} className="flex items-center justify-between rounded-xl border border-[#E6E2DA] bg-[#FAF8F5] p-3 text-xs">
                 <div>
-                  <p className="font-bold text-[#2D2D2A]">{movement.description}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-bold text-[#2D2D2A]">{movement.description}</p>
+                    {movement.type === "expense" && (
+                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
+                        movement.approval_status === "confirmed"
+                          ? "bg-emerald-50 text-[#5A6A42]"
+                          : "bg-[#FFF7ED] text-[#C2845D]"
+                      }`}>
+                        {movement.approval_status === "confirmed" ? "Confirmado" : "Pendiente"}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[10px] text-[#6B665F] mt-0.5">
                     Responsable: {movement.responsible || "Sistema"} · {new Date(movement.created_at).toLocaleDateString()}
                   </p>
+                  {canManage && movement.type === "expense" && movement.approval_status !== "confirmed" && (
+                    <button
+                      type="button"
+                      onClick={() => onConfirmExpense(movement.id)}
+                      className="mt-2 rounded-lg border border-[#C2845D]/30 bg-white px-3 py-1 text-[10px] font-bold uppercase text-[#C2845D] hover:bg-[#FFF7ED] cursor-pointer"
+                    >
+                      Confirmar gasto
+                    </button>
+                  )}
                 </div>
                 <span className={`font-mono font-bold text-sm ${movement.type === "income" ? "text-[#5A6A42]" : "text-[#A44A3F]"}`}>
                   {movement.type === "income" ? "+" : "-"}${movement.amount.toLocaleString()} MXN

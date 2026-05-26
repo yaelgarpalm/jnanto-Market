@@ -184,5 +184,8 @@ export interface CommunityFundMovement {
   description: string;
   responsible?: string;
   evidence_url?: string;
+  approval_status?: "pending" | "confirmed";
+  approved_by?: string | null;
+  approved_at?: string | null;
   created_at: string;
 }

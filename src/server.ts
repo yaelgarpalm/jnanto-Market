@@ -1263,15 +1263,19 @@ app.get("/api/resources", async (_req, res, next) => {
   }
 });
 
-app.post("/api/resources", requireAuth, requireRoles(["cooperative", "inventory_manager", "admin"]), async (req: AuthedRequest, res, next) => {
+app.post("/api/resources", requireAuth, requireRoles(["producer", "cooperative", "inventory_manager", "admin"]), async (req: AuthedRequest, res, next) => {
   try {
+    const quantity = money(req.body.quantity);
+    if (!assertString(req.body.name) || !assertString(req.body.description) || quantity <= 0 || !assertString(req.body.unit)) {
+      return res.status(400).json({ error: "Completa nombre, descripcion, cantidad y unidad para registrar el recurso." });
+    }
     const id = `res-${Date.now()}`;
     const resource = {
       id,
       name: assertString(req.body.name),
       type: req.body.type === "maquinaria" ? "maquinaria" : "insumo",
       description: assertString(req.body.description),
-      quantity: money(req.body.quantity),
+      quantity,
       unit: assertString(req.body.unit, "unidades"),
       cooperative_id: assertString(req.body.cooperativeId, req.profile!.cooperative_id || "coop-1"),
       rental_cost: money(req.body.rentalCost),
@@ -1281,14 +1285,15 @@ app.post("/api/resources", requireAuth, requireRoles(["cooperative", "inventory_
     };
     const { data, error } = await supabase.from("shared_resources").insert(resource).select("*").single();
     if (error) throw error;
-    await supabase.from("inventory_movements").insert({
+    const { data: movement, error: movementError } = await supabase.from("inventory_movements").insert({
       resource_id: id,
       type: "in",
       quantity: resource.quantity,
       responsible_id: req.user!.id,
-      notes: "Registro inicial",
-    });
-    res.status(201).json(data);
+      notes: `Registro inicial de ${resource.name}`,
+    }).select("*").single();
+    if (movementError) throw movementError;
+    res.status(201).json({ ...data, movement });
   } catch (error) {
     next(error);
   }
@@ -1403,7 +1408,7 @@ app.post("/api/resources/reservations/:id/status", requireAuth, requireRoles(["c
         await supabase.from("shared_resources").update({ quantity: newQty }).eq("id", resourceId);
         await supabase.from("inventory_movements").insert({
           resource_id: resourceId,
-          type: "out",
+          type: "loan",
           quantity: qty,
           responsible_id: req.user!.id,
           notes: `Prestamo aprobado — Reserva ${req.params.id.slice(0, 8)}`,
@@ -1418,7 +1423,7 @@ app.post("/api/resources/reservations/:id/status", requireAuth, requireRoles(["c
         await supabase.from("shared_resources").update({ quantity: newQty }).eq("id", resourceId);
         await supabase.from("inventory_movements").insert({
           resource_id: resourceId,
-          type: "in",
+          type: "return",
           quantity: qty,
           responsible_id: req.user!.id,
           notes: `Prestamo cancelado — Reintegro Reserva ${req.params.id.slice(0, 8)}`,
@@ -1439,7 +1444,10 @@ app.get("/api/community-fund", async (_req, res, next) => {
       .select("*")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    const balance = (data || []).reduce((sum, item) => sum + (item.type === "income" ? money(item.amount) : -money(item.amount)), 0);
+    const balance = (data || []).reduce((sum, item) => {
+      if (item.type === "income") return sum + money(item.amount);
+      return item.approval_status === "confirmed" ? sum - money(item.amount) : sum;
+    }, 0);
     res.json({ balance, movements: data || [] });
   } catch (error) {
     next(error);
@@ -1472,11 +1480,40 @@ app.post("/api/community-fund/expense", requireAuth, requireRoles(["cooperative"
         responsible: req.profile!.full_name,
         evidence_url: assertString(req.body.evidenceUrl),
         cooperative_id: req.profile!.cooperative_id,
+        approval_status: "pending",
       })
       .select("*")
       .single();
     if (error) throw error;
     res.status(201).json(data);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/community-fund/movements/:id/confirm", requireAuth, requireRoles(["cooperative", "inventory_manager", "admin"]), async (req: AuthedRequest, res, next) => {
+  try {
+    const { data: movement, error: movementError } = await supabase
+      .from("community_fund_movements")
+      .select("*")
+      .eq("id", req.params.id)
+      .maybeSingle();
+    if (movementError) throw movementError;
+    if (!movement) return res.status(404).json({ error: "Movimiento del fondo no encontrado." });
+    if (movement.type !== "expense") return res.status(400).json({ error: "Solo los gastos requieren confirmacion." });
+
+    const { data, error } = await supabase
+      .from("community_fund_movements")
+      .update({
+        approval_status: "confirmed",
+        approved_by: req.user!.id,
+        approved_at: new Date().toISOString(),
+      })
+      .eq("id", req.params.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    res.json(data);
   } catch (error) {
     next(error);
   }

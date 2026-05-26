@@ -604,6 +604,17 @@ export default function App() {
     }
 
     if (["cooperative", "inventory_manager", "admin"].includes(profile.role)) {
+      fundMovements
+        .filter((movement) => movement.type === "expense" && movement.approval_status !== "confirmed")
+        .slice(0, 4)
+        .forEach((movement) => items.push({
+          id: `fund-expense:${movement.id}:${movement.approval_status || "pending"}`,
+          title: "Gasto pendiente de confirmar",
+          body: `${movement.description}: $${Number(movement.amount || 0).toLocaleString("es-MX")} MXN.`,
+          actionLabel: "Confirmar gasto",
+          action: "openFund",
+        }));
+
       resources
         .filter((resource) => Number(resource.quantity || 0) <= Number(resource.low_stock_threshold || 0))
         .slice(0, 4)
@@ -715,7 +726,7 @@ export default function App() {
     }
 
     return items.filter((item) => !dismissedNotificationIds.includes(item.id));
-  }, [dismissedNotificationIds, products, profile, purchaseOrders, reservations, resources, salesOrders]);
+  }, [dismissedNotificationIds, fundMovements, products, profile, purchaseOrders, reservations, resources, salesOrders]);
 
   function addToCart(product: Product) {
     if (!canShop) {
@@ -1051,13 +1062,17 @@ export default function App() {
       setAuthMessage("Completa nombre, descripción, cantidad y unidad para registrar el recurso.");
       return;
     }
-    await api("/api/resources", {
-      method: "POST",
-      body: JSON.stringify({ ...resourceForm, cooperativeId: profile?.cooperative_id || "coop-1" }),
-    });
-    setAuthMessage("Recurso registrado exitosamente en el almacén.");
-    setResourceForm({ name: "", type: "insumo", description: "", quantity: "", unit: "", rentalCost: "" });
-    await Promise.all([loadPublicData(), loadPrivateData()]);
+    try {
+      await api("/api/resources", {
+        method: "POST",
+        body: JSON.stringify({ ...resourceForm, cooperativeId: profile?.cooperative_id || "coop-1" }),
+      });
+      setAuthMessage("Recurso registrado exitosamente y agregado a la bitácora de inventario.");
+      setResourceForm({ name: "", type: "insumo", description: "", quantity: "", unit: "", rentalCost: "" });
+      await Promise.all([loadPublicData(), loadPrivateData()]);
+    } catch (error) {
+      setAuthMessage(getFriendlyError(error, "No se pudo registrar el recurso."));
+    }
   }
 
   async function registerMovement(resourceId: string, type: "in" | "out", quantity: number, notes: string) {
@@ -1088,8 +1103,21 @@ export default function App() {
       }),
     });
     event.currentTarget.reset();
-    setAuthMessage("Gasto registrado y descontado del fondo comunal.");
+    setAuthMessage("Gasto registrado. Quedó pendiente de confirmación para descontarse del fondo comunal.");
     await Promise.all([loadPublicData(), loadPrivateData()]);
+  }
+
+  async function confirmFundExpense(movementId: string) {
+    try {
+      await api(`/api/community-fund/movements/${movementId}/confirm`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setAuthMessage("Gasto confirmado correctamente.");
+      await Promise.all([loadPublicData(), loadPrivateData()]);
+    } catch (error) {
+      setAuthMessage(getFriendlyError(error, "No se pudo confirmar el gasto."));
+    }
   }
 
   async function addSensorReading(event: FormEvent) {
@@ -1303,6 +1331,7 @@ export default function App() {
               movements={fundMovements}
               canManage={Boolean(profile && ["admin", "cooperative", "inventory_manager"].includes(profile.role))}
               onExpense={addFundExpense}
+              onConfirmExpense={confirmFundExpense}
             />
           )}
 

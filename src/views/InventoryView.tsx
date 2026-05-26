@@ -152,8 +152,8 @@ export default function InventoryView({
                       <p className="font-bold text-sm text-[#2D2D2A]">{resource?.name || "Recurso eliminado"}</p>
                       <p className="text-stone-500 mt-0.5">{move.notes || "Ajuste de inventario"} · {new Date(move.created_at).toLocaleDateString()}</p>
                     </div>
-                    <span className={`font-mono font-bold text-sm px-2.5 py-1 rounded-full ${move.type === "in" ? "bg-emerald-50 text-[#5A6A42]" : "bg-red-50 text-[#A44A3F]"}`}>
-                      {move.type === "in" ? "+" : "-"}{move.quantity} {resource?.unit || ""}
+                    <span className={`font-mono font-bold text-sm px-2.5 py-1 rounded-full ${["in", "return"].includes(move.type) ? "bg-emerald-50 text-[#5A6A42]" : "bg-red-50 text-[#A44A3F]"}`}>
+                      {["in", "return"].includes(move.type) ? "+" : "-"}{move.quantity} {resource?.unit || ""}
                     </span>
                   </div>
                 );

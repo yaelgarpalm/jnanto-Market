@@ -125,6 +125,9 @@ create table if not exists public.community_fund_movements (
   evidence_url text,
   order_id uuid references public.orders(id) on delete set null,
   cooperative_id text,
+  approval_status text not null default 'pending' check (approval_status in ('pending', 'confirmed')),
+  approved_by uuid references auth.users(id) on delete set null,
+  approved_at timestamptz,
   created_at timestamptz not null default now()
 );
 
