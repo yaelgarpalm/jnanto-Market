@@ -772,6 +772,44 @@ export default function App() {
     setAuthMessage("QR descargado como imagen PNG.");
   }
 
+  async function downloadProducerReport() {
+    const headers = await authHeaders();
+    const response = await fetch("/api/reports/producer.pdf", { headers });
+    if (!response.ok) {
+      setAuthMessage("No se pudo generar el reporte del productor.");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "jnatjo-reporte-productor.pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setAuthMessage("Reporte del productor descargado en PDF.");
+  }
+
+  async function downloadCoopReport() {
+    const headers = await authHeaders();
+    const response = await fetch("/api/reports/cooperative.pdf", { headers });
+    if (!response.ok) {
+      setAuthMessage("No se pudo generar el reporte de la cooperativa.");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "jnatjo-reporte-cooperativa.pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setAuthMessage("Reporte de cooperativa descargado en PDF.");
+  }
+
   async function createProduct(event: FormEvent) {
     event.preventDefault();
     const materialsCost = (productForm.materialItems || []).reduce((sum: number, item: MaterialItem) => sum + Number(item.cost || 0), 0);
@@ -1115,6 +1153,7 @@ export default function App() {
               onRestock={restockProduct}
               onImageUpload={uploadProductImages}
               onDownloadQr={downloadProductQr}
+              onDownloadReport={downloadProducerReport}
             />
           )}
 
@@ -1129,6 +1168,7 @@ export default function App() {
               orders={orders}
               onTrace={openTrace}
               onDownloadQr={downloadProductQr}
+              onDownloadReport={downloadCoopReport}
             />
           )}
 

@@ -1,5 +1,5 @@
 import React, { FormEvent } from "react";
-import { Download, ImageUp, PackageCheck, Plus, QrCode, ReceiptText, Trash2 } from "lucide-react";
+import { Download, FileText, ImageUp, PackageCheck, Plus, QrCode, ReceiptText, Trash2 } from "lucide-react";
 import { MaterialItem, Order, Producer, Product, Profile } from "../types";
 
 interface ProducerViewProps {
@@ -14,6 +14,7 @@ interface ProducerViewProps {
   onRestock: (productId: string, amount: number) => void;
   onImageUpload: (files: File[]) => void;
   onDownloadQr: (product: Product, orderId?: string) => void;
+  onDownloadReport: () => void;
 }
 
 const categories = [
@@ -47,6 +48,7 @@ export default function ProducerView({
   onRestock,
   onImageUpload,
   onDownloadQr,
+  onDownloadReport,
 }: ProducerViewProps) {
   const isProducerOrStaff = Boolean(profile && ["producer", "cooperative", "admin"].includes(profile.role));
   const isProducer = profile?.role === "producer";
@@ -400,8 +402,21 @@ export default function ProducerView({
       </form>
 
       <div className="rounded-2xl border border-[#E6E2DA] bg-white p-5 shadow-xs space-y-3">
-        <h3 className="font-serif font-bold text-[#2D2D2A] text-sm">Mis Registros de Piezas</h3>
-        <p className="text-[11px] text-[#6B665F] leading-tight">Haz clic en tu pieza registrada para consultar su código de trazabilidad y auditar su línea de tiempo.</p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h3 className="font-serif font-bold text-[#2D2D2A] text-sm">Mis Registros de Piezas</h3>
+            <p className="text-[11px] text-[#6B665F] leading-tight">Haz clic en tu pieza registrada para consultar su código de trazabilidad y auditar su línea de tiempo.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onDownloadReport}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#5A6A42] hover:bg-[#2D2D2A] px-3 py-2 text-[10px] font-bold uppercase text-white transition-all cursor-pointer"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Reporte PDF
+            <Download className="h-3 w-3" />
+          </button>
+        </div>
         <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
           {visibleProducts.length === 0 ? (
             <p className="text-xs text-[#8A847C] italic">No has registrado piezas todavía.</p>

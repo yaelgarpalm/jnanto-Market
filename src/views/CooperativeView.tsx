@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, Download, PackageCheck, QrCode, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Download, FileText, PackageCheck, QrCode, ShieldAlert } from "lucide-react";
 import { Order, Product, Profile, ResourceReservation } from "../types";
 
 interface CooperativeViewProps {
@@ -12,6 +12,7 @@ interface CooperativeViewProps {
   onFulfillment: (id: string, status: "preparing" | "shipped" | "delivered" | "cancelled") => void;
   onTrace: (product: Product) => void;
   onDownloadQr: (product: Product, orderId?: string) => void;
+  onDownloadReport: () => void;
 }
 
 export default function CooperativeView({
@@ -24,6 +25,7 @@ export default function CooperativeView({
   onFulfillment,
   onTrace,
   onDownloadQr,
+  onDownloadReport,
 }: CooperativeViewProps) {
   const isCoopOrStaff = Boolean(profile && ["cooperative", "verifier", "inventory_manager", "admin"].includes(profile.role));
   const pending = products.filter((item) => item.status === "pending");
@@ -31,6 +33,19 @@ export default function CooperativeView({
 
   return (
     <div className="grid gap-5 xl:grid-cols-2">
+      {/* Report download bar */}
+      <div className="xl:col-span-2 flex justify-end">
+        <button
+          type="button"
+          onClick={onDownloadReport}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-[#C2845D] hover:bg-[#2D2D2A] px-4 py-2 text-[10px] font-bold uppercase text-white transition-all cursor-pointer"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          Descargar Reporte de Cooperativa (PDF)
+          <Download className="h-3 w-3" />
+        </button>
+      </div>
+
       {/* Product Origin Verification */}
       <div className="rounded-2xl border border-[#E6E2DA] bg-white p-5 shadow-xs flex flex-col justify-between">
         <div>
