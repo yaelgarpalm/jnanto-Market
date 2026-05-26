@@ -45,7 +45,7 @@ type MarketplaceFilters = {
   minProducerShare: "all" | "60" | "70";
 };
 type AppNotification = NavNotification & {
-  action: "restock" | "openPurchases" | "openCooperative" | "openProducer";
+  action: "restock" | "openPurchases" | "openCooperative" | "openProducer" | "openInventory" | "openFund";
   productId?: string;
 };
 type RewardBalance = {
@@ -145,20 +145,20 @@ export default function App() {
   });
 
   const [resourceForm, setResourceForm] = useState({
-    name: "Hilo rojo",
+    name: "",
     type: "insumo" as "insumo" | "maquinaria",
-    description: "Lote comunitario para bordado tradicional.",
-    quantity: 120,
-    unit: "piezas",
-    rentalCost: 0,
+    description: "",
+    quantity: "",
+    unit: "",
+    rentalCost: "",
   });
 
   const [reservationForm, setReservationForm] = useState({
     resourceId: "",
-    startDate: "2026-05-28T10:00",
-    endDate: "2026-05-28T13:00",
     quantity: 1,
-    notes: "Uso para produccion artesanal.",
+    startDate: "",
+    endDate: "",
+    notes: "",
   });
 
   const [shippingForm, setShippingForm] = useState({
@@ -206,9 +206,9 @@ export default function App() {
   const [sensorForm, setSensorForm] = useState({
     productId: "",
     sensorType: "temperature",
-    value: 22,
-    unit: "C",
-    location: "Bodega comunitaria",
+    value: "",
+    unit: "",
+    location: "",
   });
 
   const publicTraceCode = useMemo(() => {
@@ -596,6 +596,43 @@ export default function App() {
         }));
     }
 
+    if (["cooperative", "inventory_manager", "admin"].includes(profile.role)) {
+      resources
+        .filter((resource) => Number(resource.quantity || 0) <= Number(resource.low_stock_threshold || 0))
+        .slice(0, 4)
+        .forEach((resource) => items.push({
+          id: `resource-stock:${resource.id}:${resource.quantity}`,
+          title: "Recurso con bajo inventario",
+          body: `${resource.name} tiene ${resource.quantity} ${resource.unit} disponibles.`,
+          actionLabel: "Ver inventario",
+          action: "openInventory",
+        }));
+
+      reservations
+        .filter((reservation) => reservation.status === "pending")
+        .slice(0, 4)
+        .forEach((reservation) => items.push({
+          id: `reservation:${reservation.id}:${reservation.status}`,
+          title: "Préstamo pendiente",
+          body: `${reservation.user_name} solicitó ${reservation.resource_name}.`,
+          actionLabel: "Atender préstamo",
+          action: "openCooperative",
+        }));
+    }
+
+    if (profile.role === "customer") {
+      reservations
+        .filter((reservation) => reservation.status !== "pending")
+        .slice(0, 4)
+        .forEach((reservation) => items.push({
+          id: `my-reservation:${reservation.id}:${reservation.status}`,
+          title: "Estado de préstamo actualizado",
+          body: `${reservation.resource_name}: ${reservation.status}.`,
+          actionLabel: "Ver inventario",
+          action: "openInventory",
+        }));
+    }
+
     if (profile.role === "producer") {
       salesOrders
         .flatMap((order) =>
@@ -671,7 +708,7 @@ export default function App() {
     }
 
     return items.filter((item) => !dismissedNotificationIds.includes(item.id));
-  }, [dismissedNotificationIds, products, profile, purchaseOrders, salesOrders]);
+  }, [dismissedNotificationIds, products, profile, purchaseOrders, reservations, resources, salesOrders]);
 
   function addToCart(product: Product) {
     if (!canShop) {
@@ -869,6 +906,16 @@ export default function App() {
     if (item.action === "openProducer") {
       setTab("producer");
       dismissNotification(item.id);
+      return;
+    }
+    if (item.action === "openInventory") {
+      setTab("inventory");
+      dismissNotification(item.id);
+      return;
+    }
+    if (item.action === "openFund") {
+      setTab("fund");
+      dismissNotification(item.id);
     }
   }
 
@@ -927,12 +974,17 @@ export default function App() {
 
   async function reserveResource(event: FormEvent) {
     event.preventDefault();
+    if (!reservationForm.resourceId || !reservationForm.quantity || !reservationForm.startDate || !reservationForm.endDate || !reservationForm.notes) {
+      setAuthMessage("Completa recurso, cantidad, inicio, fin y notas para solicitar el préstamo.");
+      return;
+    }
     await api("/api/resources/reservations", {
       method: "POST",
       body: JSON.stringify(reservationForm),
     });
     setAuthMessage("Solicitud de reserva de maquinaria registrada.");
-    await loadPrivateData();
+    setReservationForm({ resourceId: resources[0]?.id || "", quantity: 1, startDate: "", endDate: "", notes: "" });
+    await Promise.all([loadPublicData(), loadPrivateData()]);
   }
 
   async function updateReservation(id: string, status: "approved" | "completed" | "cancelled") {
@@ -940,7 +992,8 @@ export default function App() {
       method: "POST",
       body: JSON.stringify({ status }),
     });
-    await loadPrivateData();
+    setAuthMessage(`Estado del préstamo actualizado a ${status}.`);
+    await Promise.all([loadPublicData(), loadPrivateData()]);
   }
 
   async function updateOrderFulfillment(orderId: string, status: "preparing" | "shipped" | "delivered" | "cancelled") {
@@ -954,12 +1007,17 @@ export default function App() {
 
   async function createResource(event: FormEvent) {
     event.preventDefault();
+    if (!resourceForm.name || !resourceForm.description || !resourceForm.quantity || !resourceForm.unit) {
+      setAuthMessage("Completa nombre, descripción, cantidad y unidad para registrar el recurso.");
+      return;
+    }
     await api("/api/resources", {
       method: "POST",
       body: JSON.stringify({ ...resourceForm, cooperativeId: profile?.cooperative_id || "coop-1" }),
     });
     setAuthMessage("Recurso registrado exitosamente en el almacén.");
-    await loadPublicData();
+    setResourceForm({ name: "", type: "insumo", description: "", quantity: "", unit: "", rentalCost: "" });
+    await Promise.all([loadPublicData(), loadPrivateData()]);
   }
 
   async function registerMovement(resourceId: string, type: "in" | "out", quantity: number, notes: string) {
@@ -978,6 +1036,10 @@ export default function App() {
   async function addFundExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    if (!form.get("description") || !form.get("amount")) {
+      setAuthMessage("Completa descripción y monto para registrar el gasto.");
+      return;
+    }
     await api("/api/community-fund/expense", {
       method: "POST",
       body: JSON.stringify({
@@ -986,16 +1048,22 @@ export default function App() {
       }),
     });
     event.currentTarget.reset();
-    await loadPublicData();
+    setAuthMessage("Gasto registrado y descontado del fondo comunal.");
+    await Promise.all([loadPublicData(), loadPrivateData()]);
   }
 
   async function addSensorReading(event: FormEvent) {
     event.preventDefault();
+    if (!sensorForm.productId || !sensorForm.value || !sensorForm.unit || !sensorForm.location) {
+      setAuthMessage("Completa producto, valor, unidad y ubicación para registrar telemetría.");
+      return;
+    }
     await api("/api/sensors", {
       method: "POST",
       body: JSON.stringify(sensorForm),
     });
     setAuthMessage("Telemetría de sensor IoT registrada con éxito.");
+    await Promise.all([loadPublicData(), loadPrivateData()]);
   }
 
   if (publicTraceCode) {
@@ -1007,7 +1075,7 @@ export default function App() {
         profile={profile}
         onBack={() => {
           window.history.pushState({}, "", "/");
-          window.location.reload();
+          setPublicTrace(null);
         }}
         onConfirmReceipt={confirmReceiptFromTrace}
       />

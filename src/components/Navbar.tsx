@@ -10,7 +10,6 @@ import {
   Search,
   ShieldCheck,
   ShoppingCart,
-  Store,
   User,
 } from "lucide-react";
 
@@ -37,8 +36,8 @@ interface NavbarProps {
   onNotificationClick?: (notification: NavNotification) => void;
 }
 
-const tabConfig: Record<CoreTab, { label: string; icon: React.ReactNode }> = {
-  marketplace: { label: "Tienda", icon: <Store className="h-3.5 w-3.5" /> },
+const tabConfig: Record<CoreTab, { label: string; icon?: React.ReactNode }> = {
+  marketplace: { label: "Tienda" },
   purchases: { label: "Compras", icon: <PackageCheck className="h-3.5 w-3.5" /> },
   producer: { label: "Productor", icon: <Palette className="h-3.5 w-3.5" /> },
   cooperative: { label: "Cooperativa", icon: <Building2 className="h-3.5 w-3.5" /> },

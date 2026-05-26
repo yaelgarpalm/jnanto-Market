@@ -55,7 +55,7 @@ export default function MarketplaceView({
   onAdd,
 }: MarketplaceViewProps) {
   const featuredProduct = products[0];
-  const catalogProducts = products.slice(0, 8);
+  const catalogProducts = products;
   const similarItems = repeatProducts(products.slice(1).length ? products.slice(1) : products, 4);
   const recentlyViewed = repeatProducts(products, 4);
   const materialOptions = Array.from(new Set(products.flatMap((product) => product.materials))).filter(Boolean).slice(0, 8);
@@ -272,7 +272,7 @@ export default function MarketplaceView({
         )}
       </section>
 
-      {products.length > 0 && (
+      {products.length > 0 && !hasActiveFilters && (
         <section className="space-y-12 border-t border-black/10 pt-10">
           <div>
             <div className="mb-6 flex items-center justify-between gap-3">

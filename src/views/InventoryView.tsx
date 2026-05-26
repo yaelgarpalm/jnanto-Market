@@ -31,9 +31,9 @@ export default function InventoryView({
 }: InventoryViewProps) {
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [adjustmentForm, setAdjustmentForm] = useState({
-    quantity: 10,
+    quantity: "",
     type: "in" as "in" | "out",
-    notes: "Ajuste de inventario",
+    notes: "",
   });
 
   const canManage = Boolean(profile && ["admin", "cooperative", "inventory_manager"].includes(profile.role));
@@ -84,13 +84,16 @@ export default function InventoryView({
                         <div className="flex gap-2">
                           <input
                             type="number"
+                            required
+                            min="1"
                             value={adjustmentForm.quantity}
-                            onChange={(e) => setAdjustmentForm((prev) => ({ ...prev, quantity: Number(e.target.value) }))}
+                            onChange={(e) => setAdjustmentForm((prev) => ({ ...prev, quantity: e.target.value }))}
                             className="w-20 rounded-md border border-[#E6E2DA] px-2 py-1 text-xs outline-none"
                             placeholder="Cant."
                           />
                           <input
                             type="text"
+                            required
                             value={adjustmentForm.notes}
                             onChange={(e) => setAdjustmentForm((prev) => ({ ...prev, notes: e.target.value }))}
                             className="flex-1 rounded-md border border-[#E6E2DA] px-2 py-1 text-xs outline-none"
@@ -101,7 +104,8 @@ export default function InventoryView({
                           <button
                             type="button"
                             onClick={() => {
-                              onRegisterMovement(resource.id, adjustmentForm.type, adjustmentForm.quantity, adjustmentForm.notes);
+                              if (!adjustmentForm.quantity || !adjustmentForm.notes) return;
+                              onRegisterMovement(resource.id, adjustmentForm.type, Number(adjustmentForm.quantity), adjustmentForm.notes);
                               setSelectedResourceId(null);
                             }}
                             className="flex-1 bg-[#2D2D2A] hover:bg-[#5A6A42] text-white py-1 rounded-md text-xs font-bold cursor-pointer"
@@ -121,7 +125,7 @@ export default function InventoryView({
                       <button
                         onClick={() => {
                           setSelectedResourceId(resource.id);
-                          setAdjustmentForm({ quantity: 10, type: "in", notes: "Ajuste de inventario" });
+                          setAdjustmentForm({ quantity: "", type: "in", notes: "" });
                         }}
                         className="w-full rounded-lg border border-[#E6E2DA] hover:bg-[#FAF8F5] text-[#2D2D2A] py-1.5 text-xs font-bold uppercase tracking-wider cursor-pointer"
                       >
@@ -167,6 +171,7 @@ export default function InventoryView({
             <select
               value={reservationForm.resourceId}
               onChange={(e) => setReservationForm((p: any) => ({ ...p, resourceId: e.target.value }))}
+              required
               className="mt-1 w-full rounded-xl border border-[#E6E2DA] bg-[#FAF8F5] px-3 py-2 text-xs outline-none focus:border-[#C2845D]"
             >
               {resources.map((r) => (
@@ -180,6 +185,7 @@ export default function InventoryView({
             Inicio de Préstamo
             <input
               type="datetime-local"
+              required
               value={reservationForm.startDate}
               onChange={(e) => setReservationForm((p: any) => ({ ...p, startDate: e.target.value }))}
               className="mt-1 w-full rounded-xl border border-[#E6E2DA] bg-[#FAF8F5] px-3 py-2 text-xs outline-none focus:border-[#C2845D]"
@@ -189,6 +195,7 @@ export default function InventoryView({
             Fin de Préstamo
             <input
               type="datetime-local"
+              required
               value={reservationForm.endDate}
               onChange={(e) => setReservationForm((p: any) => ({ ...p, endDate: e.target.value }))}
               className="mt-1 w-full rounded-xl border border-[#E6E2DA] bg-[#FAF8F5] px-3 py-2 text-xs outline-none focus:border-[#C2845D]"
@@ -213,6 +220,7 @@ export default function InventoryView({
             Notas / Uso Planificado
             <input
               value={reservationForm.notes}
+              required
               onChange={(e) => setReservationForm((p: any) => ({ ...p, notes: e.target.value }))}
               className="mt-1 w-full rounded-xl border border-[#E6E2DA] bg-[#FAF8F5] px-3 py-2 text-xs outline-none focus:border-[#C2845D]"
               placeholder="Ej. Confección de fajas tradicionales"
@@ -251,9 +259,11 @@ export default function InventoryView({
             <input
               type="number"
               required
+              min="1"
               value={resourceForm.quantity}
-              onChange={(e) => setResourceForm((p: any) => ({ ...p, quantity: Number(e.target.value) }))}
+              onChange={(e) => setResourceForm((p: any) => ({ ...p, quantity: e.target.value }))}
               className="mt-1 w-full rounded-xl border border-[#E6E2DA] bg-[#FAF8F5] px-3 py-2 text-xs outline-none focus:border-[#C2845D]"
+              placeholder="Ej. 120"
             />
           </label>
           <label className="block font-bold uppercase tracking-wider text-[#6B665F]">
