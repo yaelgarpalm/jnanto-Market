@@ -123,6 +123,7 @@ export interface Order {
   shipping_notes?: string | null;
   created_at: string;
   order_items?: OrderItem[];
+  reward_points?: number;
 }
 
 export interface OrderItem {
@@ -140,6 +141,7 @@ export interface OrderItem {
     comments?: string;
     rewardPoints?: number;
   } | null;
+  rewardPoints?: number;
 }
 
 export interface CommunityResource {

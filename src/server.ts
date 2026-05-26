@@ -255,6 +255,28 @@ async function insertTraceabilityStage(input: {
   return data;
 }
 
+async function grantReward(input: {
+  customerId: string;
+  orderId: string;
+  productId: string;
+  points: number;
+  reason: string;
+  payload?: Record<string, unknown>;
+}) {
+  const { error } = await supabase.from("customer_rewards").upsert(
+    {
+      customer_id: input.customerId,
+      order_id: input.orderId,
+      product_id: input.productId,
+      points: input.points,
+      reason: input.reason,
+      payload: input.payload || {},
+    },
+    { onConflict: "customer_id,order_id,product_id,reason" },
+  );
+  if (error && error.code !== "42P01") throw error;
+}
+
 function publicTraceStage(stage: any) {
   if (!stage) return stage;
   const payload = stage.payload || {};
@@ -868,6 +890,14 @@ app.post("/api/products/:id/confirm-receipt", requireAuth, async (req: AuthedReq
 
     const rewardPoints = Math.max(25, Math.round(money(product.price) * 0.05));
     if (existing) {
+      await grantReward({
+        customerId: req.user!.id,
+        orderId: order.id,
+        productId: product.id,
+        points: rewardPoints,
+        reason: "confirm_receipt",
+        payload: { producerRating, deliveryRating },
+      });
       return res.json({ success: true, alreadyConfirmed: true, rewardPoints, stage: existing });
     }
 
@@ -876,6 +906,15 @@ app.post("/api/products/:id/confirm-receipt", requireAuth, async (req: AuthedReq
       .update({ fulfillment_status: "delivered" })
       .eq("id", order.id);
     if (updateError) throw updateError;
+
+    await grantReward({
+      customerId: req.user!.id,
+      orderId: order.id,
+      productId: product.id,
+      points: rewardPoints,
+      reason: "confirm_receipt",
+      payload: { producerRating, deliveryRating },
+    });
 
     const stage = await insertTraceabilityStage({
       productId: req.params.id,
@@ -1347,8 +1386,59 @@ app.get("/api/orders", requireAuth, async (req: AuthedRequest, res, next) => {
     if (error) throw error;
 
     const orders = data || [];
+
+    async function attachRewards(rows: any[]) {
+      const orderIds = rows.map((order: any) => order.id);
+      if (orderIds.length === 0) return rows;
+
+      const rewardByOrderProduct = new Map<string, number>();
+      const rewardByOrder = new Map<string, number>();
+
+      const { data: rewards, error: rewardError } = await supabase
+        .from("customer_rewards")
+        .select("order_id, product_id, points")
+        .in("order_id", orderIds);
+      if (rewardError && rewardError.code !== "42P01") throw rewardError;
+
+      for (const reward of rewards || []) {
+        const points = Number(reward.points || 0);
+        rewardByOrderProduct.set(`${reward.order_id}:${reward.product_id}`, points);
+        rewardByOrder.set(reward.order_id, (rewardByOrder.get(reward.order_id) || 0) + points);
+      }
+
+      if (!rewards || rewards.length === 0) {
+        const productIds = Array.from(
+          new Set(rows.flatMap((order: any) => (order.order_items || []).map((item: any) => item.product_id))),
+        );
+        if (productIds.length > 0) {
+          const { data: receivedStages, error: receivedError } = await supabase
+            .from("traceability_stages")
+            .select("product_id, payload")
+            .eq("stage_key", "received")
+            .in("product_id", productIds);
+          if (receivedError) throw receivedError;
+          for (const stage of receivedStages || []) {
+            const payload = stage.payload || {};
+            if (!payload.orderId || typeof payload.rewardPoints !== "number") continue;
+            const points = Number(payload.rewardPoints || 0);
+            rewardByOrderProduct.set(`${payload.orderId}:${stage.product_id}`, points);
+            rewardByOrder.set(String(payload.orderId), (rewardByOrder.get(String(payload.orderId)) || 0) + points);
+          }
+        }
+      }
+
+      return rows.map((order: any) => ({
+        ...order,
+        reward_points: rewardByOrder.get(order.id) || 0,
+        order_items: (order.order_items || []).map((item: any) => ({
+          ...item,
+          rewardPoints: rewardByOrderProduct.get(`${order.id}:${item.product_id}`) || 0,
+        })),
+      }));
+    }
+
     if (req.profile!.role === "admin" && (scope === "all" || scope === "admin" || scope === "operations")) {
-      return res.json(orders);
+      return res.json(await attachRewards(orders));
     }
 
     if (scope === "sales" || scope === "operations") {
@@ -1397,8 +1487,7 @@ app.get("/api/orders", requireAuth, async (req: AuthedRequest, res, next) => {
         }
       }
 
-      return res.json(
-        paidOrders
+      const scopedOrders = paidOrders
           .map((order: any) => ({
             ...order,
             order_items: (order.order_items || [])
@@ -1408,15 +1497,14 @@ app.get("/api/orders", requireAuth, async (req: AuthedRequest, res, next) => {
                 review: reviewByOrderProduct.get(`${order.id}:${item.product_id}`) || null,
               })),
           }))
-          .filter((order: any) => order.order_items.length > 0),
-      );
+          .filter((order: any) => order.order_items.length > 0);
+      return res.json(await attachRewards(scopedOrders));
     }
 
-    res.json(
-      orders.filter((order: any) => {
+    const purchaseRows = orders.filter((order: any) => {
         return order.customer_id === req.user!.id || order.customer_email === req.profile!.email;
-      }),
-    );
+      });
+    res.json(await attachRewards(purchaseRows));
   } catch (error) {
     next(error);
   }

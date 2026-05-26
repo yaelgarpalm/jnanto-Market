@@ -589,6 +589,7 @@ export default function App() {
     if (profile.role === "customer") {
       purchaseOrders.slice(0, 5).forEach((order) => {
         const count = order.order_items?.length || 0;
+        const fulfillment = order.fulfillment_status || "pending";
         if (order.status === "pending") {
           items.push({
             id: `order:${order.id}:pending`,
@@ -597,20 +598,20 @@ export default function App() {
             actionLabel: "Ver estado",
             action: "openPurchases",
           });
-        } else if (["paid", "shipped"].includes(order.status)) {
-          items.push({
-            id: `order:${order.id}:${order.status}`,
-            title: order.status === "paid" ? "Pago confirmado" : "Envío en camino",
-            body: `${count} producto(s) con trazabilidad y beneficios disponibles.`,
-            actionLabel: "Ver trazabilidad",
-            action: "openPurchases",
-          });
-        } else if (order.status === "delivered") {
+        } else if (fulfillment === "delivered") {
           items.push({
             id: `order:${order.id}:benefits`,
-            title: "Beneficios disponibles",
-            body: `Atiende tus puntos y revisa la trazabilidad de ${count} producto(s).`,
-            actionLabel: "Atender beneficios",
+            title: "Entrega realizada",
+            body: `Confirma recibido para reclamar puntos por ${count} producto(s).`,
+            actionLabel: "Reclamar puntos",
+            action: "openPurchases",
+          });
+        } else if (["paid", "preparing", "shipped"].includes(fulfillment) || order.status === "paid") {
+          items.push({
+            id: `order:${order.id}:${fulfillment}`,
+            title: fulfillment === "shipped" ? "Envío en camino" : "Pago confirmado",
+            body: `${count} producto(s) con trazabilidad disponible.`,
+            actionLabel: "Ver trazabilidad",
             action: "openPurchases",
           });
         }
@@ -832,6 +833,7 @@ export default function App() {
       method: "POST",
       body: JSON.stringify({ status }),
     });
+    setAuthMessage(`Estado de entrega actualizado a ${status}.`);
     await loadPrivateData();
   }
 

@@ -92,6 +92,18 @@ create table if not exists public.payments (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.customer_rewards (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid references auth.users(id) on delete cascade,
+  order_id uuid references public.orders(id) on delete cascade,
+  product_id text references public.products(id) on delete cascade,
+  points int not null check (points > 0),
+  reason text not null default 'confirm_receipt',
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (customer_id, order_id, product_id, reason)
+);
+
 create table if not exists public.community_fund_movements (
   id uuid primary key default gen_random_uuid(),
   type text not null check (type in ('income', 'expense')),

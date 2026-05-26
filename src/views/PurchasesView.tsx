@@ -11,6 +11,14 @@ interface PurchasesViewProps {
 
 export default function PurchasesView({ profile, orders, products, onTrace }: PurchasesViewProps) {
   const productById = new Map(products.map((product) => [product.id, product]));
+  const totalPoints = orders.reduce((sum, order) => sum + Number(order.reward_points || 0), 0);
+  const statusLabel: Record<string, string> = {
+    pending: "Pendiente",
+    preparing: "Preparando",
+    shipped: "En camino",
+    delivered: "Entregado",
+    cancelled: "Cancelado",
+  };
 
   return (
     <div className="space-y-5">
@@ -24,6 +32,11 @@ export default function PurchasesView({ profile, orders, products, onTrace }: Pu
             <p className="mt-1 text-xs leading-relaxed text-[#6B665F]">
               Consulta tus piezas adquiridas, su estado de pago y la ficha de origen con QR/NFC.
             </p>
+            {profile && (
+              <p className="mt-2 inline-flex rounded-full bg-[#5A6A42]/10 px-3 py-1 text-[11px] font-bold text-[#5A6A42]">
+                {totalPoints} puntos Jñatjo acumulados
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -46,12 +59,17 @@ export default function PurchasesView({ profile, orders, products, onTrace }: Pu
                     Orden #{order.id.slice(0, 8).toUpperCase()}
                   </p>
                   <h3 className="mt-1 font-serif text-base font-bold text-[#2D2D2A]">
-                    {order.status === "paid" ? "Compra confirmada" : "Compra en proceso"}
+                    {(order.fulfillment_status || "pending") === "delivered" ? "Compra entregada" : order.status === "paid" ? "Compra confirmada" : "Compra en proceso"}
                   </h3>
                   <p className="mt-1 text-[11px] text-[#6B665F]">
-                    Entrega: <span className="font-bold uppercase">{order.fulfillment_status || "pending"}</span>
+                    Entrega: <span className="font-bold uppercase">{statusLabel[order.fulfillment_status || "pending"] || order.fulfillment_status || "Pendiente"}</span>
                     {order.shipping_city ? ` · ${order.shipping_city}, ${order.shipping_state}` : ""}
                   </p>
+                  {Number(order.reward_points || 0) > 0 && (
+                    <p className="mt-1 text-[11px] font-bold text-[#5A6A42]">
+                      Recompensas de esta orden: {order.reward_points} puntos
+                    </p>
+                  )}
                 </div>
                 <div className="text-right text-xs">
                   <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${
@@ -74,6 +92,15 @@ export default function PurchasesView({ profile, orders, products, onTrace }: Pu
                           <p className="mt-0.5 font-mono text-[10px] text-[#6B665F]">
                             Cant. {item.quantity} · ${item.unit_price.toLocaleString("es-MX")} MXN
                           </p>
+                          {(item.rewardPoints || item.review?.rewardPoints) ? (
+                            <p className="mt-1 text-[10px] font-bold text-[#5A6A42]">
+                              +{item.rewardPoints || item.review?.rewardPoints} puntos reclamados
+                            </p>
+                          ) : (order.fulfillment_status === "delivered" ? (
+                            <p className="mt-1 text-[10px] font-bold text-[#C2845D]">
+                              Confirma recibido en trazabilidad para reclamar puntos.
+                            </p>
+                          ) : null)}
                         </div>
                         {product && order.status === "paid" ? (
                           <button
