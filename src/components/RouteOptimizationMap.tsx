@@ -261,6 +261,34 @@ function splitRouteCoordinates(coordinates: [number, number][], distanceTargetKm
   return { completed: coordinates, pending: [coordinates[coordinates.length - 1]] };
 }
 
+function closestDistanceOnRoute(coordinates: [number, number][], point: [number, number]) {
+  if (coordinates.length === 0) return 0;
+  let travelled = 0;
+  let bestDistance = Infinity;
+  let bestTravelled = 0;
+
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const previous = coordinates[index - 1];
+    const current = coordinates[index];
+    const segmentKm = distanceCoords(previous, current);
+    if (segmentKm <= 0) continue;
+
+    const dx = current[0] - previous[0];
+    const dy = current[1] - previous[1];
+    const ratio = Math.max(0, Math.min(1, ((point[0] - previous[0]) * dx + (point[1] - previous[1]) * dy) / (dx * dx + dy * dy || 1)));
+    const projected: [number, number] = [previous[0] + dx * ratio, previous[1] + dy * ratio];
+    const distanceToPoint = distanceCoords(projected, point);
+
+    if (distanceToPoint < bestDistance) {
+      bestDistance = distanceToPoint;
+      bestTravelled = travelled + segmentKm * ratio;
+    }
+    travelled += segmentKm;
+  }
+
+  return bestTravelled;
+}
+
 function nearestStopDistanceKm(coordinate: [number, number] | null, stop: Stop) {
   if (!coordinate) return Infinity;
   return distanceCoords(coordinate, [stop.lon, stop.lat]);
@@ -474,17 +502,36 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
   const [routeStatus, setRouteStatus] = useState("Mapa real de OpenStreetMap con ruta vial cuando hay direcciones.");
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [speedKmh, setSpeedKmh] = useState(35);
+  const [gpsSpeedKmh, setGpsSpeedKmh] = useState<number | null>(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [gpsStatus, setGpsStatus] = useState("GPS en espera");
+  const [deviceCoordinate, setDeviceCoordinate] = useState<[number, number] | null>(null);
   const [progressKm, setProgressKm] = useState(0);
   const [completedStopIds, setCompletedStopIds] = useState<string[]>([]);
+  const [discardedStopIds, setDiscardedStopIds] = useState<string[]>([]);
   const [isAtStop, setIsAtStop] = useState(false);
-  const [trafficLevel, setTrafficLevel] = useState<"normal" | "moderado" | "alto">("normal");
-  const [hasIncident, setHasIncident] = useState(false);
-  const [missedStreet, setMissedStreet] = useState(false);
   const [replanSeed, setReplanSeed] = useState(0);
   const { depot, stops } = resolvedPlan;
-  const plannedRoute = useMemo(() => (stops.length ? twoOpt(nearestNeighbor(depot, stops)) : [depot]), [depot, stops]);
-  const directRoute = useMemo(() => (stops.length ? [depot, ...stops, depot] : [depot]), [depot, stops]);
+  const activeStops = useMemo(
+    () => stops.filter((stop) => !completedStopIds.includes(stop.id) && !discardedStopIds.includes(stop.id)),
+    [completedStopIds, discardedStopIds, stops],
+  );
+  const routeOrigin = useMemo<Stop>(
+    () => deviceCoordinate
+      ? {
+          ...depot,
+          id: "gps-origin",
+          label: "Dispositivo GPS",
+          address: "Ubicación actual del dispositivo GPS",
+          query: "Ubicación actual del dispositivo GPS",
+          lon: deviceCoordinate[0],
+          lat: deviceCoordinate[1],
+        }
+      : depot,
+    [depot, deviceCoordinate],
+  );
+  const plannedRoute = useMemo(() => (activeStops.length ? twoOpt(nearestNeighbor(routeOrigin, activeStops)) : [routeOrigin]), [activeStops, routeOrigin]);
+  const directRoute = useMemo(() => (activeStops.length ? [routeOrigin, ...activeStops, routeOrigin] : [routeOrigin]), [activeStops, routeOrigin]);
   const routeCoordinates = useMemo<[number, number][]>(() => (
     roadRoute?.coordinates?.length
       ? roadRoute.coordinates
@@ -494,19 +541,17 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
   const plannedKm = roadRoute?.distanceKm || estimatedKm;
   const directKm = routeDistance(directRoute);
   const savingsKm = Math.max(directKm - plannedKm, 0);
-  const load = stops.reduce((sum, stop) => sum + stop.demand, 0);
+  const load = activeStops.reduce((sum, stop) => sum + stop.demand, 0);
   const capacityUsed = Math.min(Math.round((load / VEHICLE_CAPACITY) * 100), 100);
   const visibleStops = plannedRoute.slice(1, -1);
   const unresolvedCount = [depot, ...stops].filter((stop) => !stop.geocoded).length;
-  const vehicleCoordinate = useMemo(() => interpolateCoordinate(routeCoordinates, progressKm), [progressKm, routeCoordinates]);
+  const simulatedCoordinate = useMemo(() => interpolateCoordinate(routeCoordinates, progressKm), [progressKm, routeCoordinates]);
+  const vehicleCoordinate = deviceCoordinate || simulatedCoordinate;
   const pendingRouteCoordinates = useMemo(() => splitRouteCoordinates(routeCoordinates, progressKm).pending, [progressKm, routeCoordinates]);
   const progressPercent = plannedKm > 0 ? Math.min(Math.round((progressKm / plannedKm) * 100), 100) : 0;
   const nextPendingStop = visibleStops.find((stop) => !completedStopIds.includes(stop.id)) || null;
   const activeStop = visibleStops.find((stop) => !completedStopIds.includes(stop.id) && nearestStopDistanceKm(vehicleCoordinate, stop) <= 0.45) || null;
-  const trafficMultiplier = trafficLevel === "alto" ? 0.45 : trafficLevel === "moderado" ? 0.7 : 1;
-  const incidentMultiplier = hasIncident ? 0.6 : 1;
-  const missedStreetMultiplier = missedStreet ? 0.75 : 1;
-  const effectiveSpeedKmh = Math.max(speedKmh * trafficMultiplier * incidentMultiplier * missedStreetMultiplier, 0);
+  const effectiveSpeedKmh = gpsSpeedKmh ?? 0;
 
   useEffect(() => {
     setResolvedPlan(rawPlan);
@@ -514,7 +559,12 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
     setIsRunning(false);
     setProgressKm(0);
     setCompletedStopIds([]);
+    setDiscardedStopIds([]);
     setIsAtStop(false);
+    setDeviceCoordinate(null);
+    setGpsSpeedKmh(null);
+    setGpsAccuracy(null);
+    setGpsStatus("GPS en espera");
     if (rawPlan.stops.length === 0) return;
 
     const controller = new AbortController();
@@ -550,13 +600,6 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
   }, [rawPlan]);
 
   useEffect(() => {
-    setIsRunning(false);
-    setProgressKm(0);
-    setCompletedStopIds([]);
-    setIsAtStop(false);
-  }, [plannedRoute.length, roadRoute?.distanceKm]);
-
-  useEffect(() => {
     setIsAtStop(Boolean(activeStop));
     if (activeStop) setIsRunning(false);
   }, [activeStop?.id]);
@@ -566,12 +609,56 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
     setIsRunning(false);
     setReplanSeed((value) => value + 1);
     setRouteStatus("Ruta recalculada automáticamente por cambio operativo.");
-  }, [completedStopIds.length, hasIncident, missedStreet, trafficLevel]);
+  }, [completedStopIds.length, discardedStopIds.length, plannedRoute.length]);
 
   useEffect(() => {
     if (!mapRef.current) return;
     window.setTimeout(() => mapRef.current?.updateSize(), 80);
   }, [isExpanded]);
+
+  useEffect(() => {
+    if (!isRunning) return;
+    if (!("geolocation" in navigator)) {
+      setGpsStatus("GPS no disponible en este navegador");
+      return;
+    }
+
+    setGpsStatus("Obteniendo ubicación del dispositivo GPS...");
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const nextCoordinate: [number, number] = [position.coords.longitude, position.coords.latitude];
+        if (!isLocalCoordinate({ lon: nextCoordinate[0], lat: nextCoordinate[1] })) {
+          setGpsStatus("GPS fuera de la zona de operación");
+          return;
+        }
+
+        const speed = typeof position.coords.speed === "number" && Number.isFinite(position.coords.speed)
+          ? Math.max(position.coords.speed * 3.6, 0)
+          : null;
+        const routeProgress = closestDistanceOnRoute(routeCoordinates, nextCoordinate);
+        const distanceFromRoute = pendingRouteCoordinates.length > 1
+          ? nearestStopDistanceKm(nextCoordinate, { lon: pendingRouteCoordinates[0][0], lat: pendingRouteCoordinates[0][1] } as Stop)
+          : 0;
+
+        setDeviceCoordinate(nextCoordinate);
+        setGpsAccuracy(position.coords.accuracy || null);
+        setGpsSpeedKmh(speed);
+        setProgressKm((current) => Math.max(current, Math.min(routeProgress, plannedKm)));
+        setGpsStatus(speed === null ? "Ubicación GPS activa; velocidad no reportada por el dispositivo" : "Ubicación y velocidad GPS activas");
+
+        if (distanceFromRoute > 0.25) {
+          setReplanSeed((value) => value + 1);
+          setRouteStatus("Ruta recalculada automáticamente por cambio de ubicación GPS.");
+        }
+      },
+      () => {
+        setGpsStatus("Permiso de ubicación pendiente o rechazado");
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 12000 },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [isRunning, pendingRouteCoordinates, plannedKm, routeCoordinates]);
 
   useEffect(() => {
     if (!isRunning || plannedKm <= 0) return;
@@ -763,31 +850,9 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
         >
           {isRunning ? "Pausar recorrido" : progressKm > 0 && progressKm < plannedKm ? "Continuar recorrido" : "Iniciar recorrido"}
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            setIsRunning(false);
-            setProgressKm(0);
-            setCompletedStopIds([]);
-            setIsAtStop(false);
-          }}
-          disabled={progressKm <= 0}
-          className="rounded-lg border border-[#D7D1C7] bg-white px-3 py-2 text-[10px] font-black uppercase text-[#2D2D2A] transition hover:bg-[#EFEDE7] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Reiniciar
-        </button>
-        <label className="flex items-center gap-2 rounded-lg border border-[#D7D1C7] bg-white px-3 py-1.5 text-[10px] font-black uppercase text-[#6B665F]">
-          Velocidad
-          <input
-            type="number"
-            min="0"
-            max="120"
-            value={speedKmh}
-            onChange={(event) => setSpeedKmh(Math.max(Number(event.target.value || 0), 0))}
-            className="w-16 rounded-md border border-[#E6E2DA] px-2 py-1 text-right font-mono text-[#2D2D2A]"
-          />
-          km/h
-        </label>
+        <div className="rounded-lg border border-[#D7D1C7] bg-white px-3 py-2 text-[10px] font-black uppercase text-[#6B665F]">
+          Velocidad GPS: <span className="font-mono text-[#2D2D2A]">{gpsSpeedKmh === null ? "--" : gpsSpeedKmh.toFixed(1)}</span> km/h
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -828,40 +893,9 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
       </div>
 
       <div className="mb-3 rounded-xl border border-[#E6E2DA] bg-white p-2 text-[10px]">
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 rounded-lg bg-[#FAF8F5] px-3 py-2 font-black uppercase text-[#6B665F]">
-            Tráfico
-            <select
-              value={trafficLevel}
-              onChange={(event) => setTrafficLevel(event.target.value as typeof trafficLevel)}
-              className="rounded-md border border-[#E6E2DA] bg-white px-2 py-1 text-[#2D2D2A]"
-            >
-              <option value="normal">Normal</option>
-              <option value="moderado">Moderado</option>
-              <option value="alto">Alto</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-2 rounded-lg bg-[#FAF8F5] px-3 py-2 font-black uppercase text-[#6B665F]">
-            <input
-              type="checkbox"
-              checked={hasIncident}
-              onChange={(event) => setHasIncident(event.target.checked)}
-              className="h-4 w-4 accent-[#A44A3F]"
-            />
-            Incidente carretera
-          </label>
-          <label className="flex items-center gap-2 rounded-lg bg-[#FAF8F5] px-3 py-2 font-black uppercase text-[#6B665F]">
-            <input
-              type="checkbox"
-              checked={missedStreet}
-              onChange={(event) => setMissedStreet(event.target.checked)}
-              className="h-4 w-4 accent-[#C2845D]"
-            />
-            Se pasó una calle
-          </label>
-        </div>
-        <p className="mt-2 text-[10px] font-bold text-[#6B665F]">
-          Velocidad efectiva: {effectiveSpeedKmh.toFixed(1)} km/h. OSRM calcula geometría vial; tráfico, calle equivocada e incidente ajustan avance y recalculan automáticamente la ruta pendiente.
+        <p className="text-[10px] font-bold text-[#6B665F]">
+          {gpsStatus}. OSRM calcula geometría vial y el sistema recalcula automáticamente cuando cambia la ubicación del dispositivo.
+          {gpsAccuracy ? ` Precisión aproximada: ${Math.round(gpsAccuracy)} m.` : ""}
           {activeStop ? ` Parada activa: ${activeStop.kind === "delivery" ? "entregar" : "recolectar"} ${productSummary(activeStop)}.` : nextPendingStop ? ` Siguiente parada VRP: ${productSummary(nextPendingStop)}.` : ""}
         </p>
       </div>
@@ -869,7 +903,7 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
       <div className={`grid gap-4 ${isExpanded ? "lg:grid-cols-[1fr_340px]" : "lg:grid-cols-[1fr_310px]"}`}>
         <div className={`${isExpanded ? "min-h-[calc(100vh-220px)]" : "min-h-[340px]"} relative overflow-hidden rounded-xl border border-[#D7D1C7] bg-[#E9E6DD]`}>
           <div ref={mapElement} className={`${isExpanded ? "h-[calc(100vh-220px)]" : "h-[340px]"} w-full`} />
-          {stops.length > 0 && (
+          {activeStops.length > 0 && (
             <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/95 px-3 py-1.5 text-[10px] font-black uppercase text-[#2458d8] shadow-sm">
               <svg viewBox="0 0 58 42" className="h-5 w-7" aria-hidden="true">
                 <path d="M14 14h27l7 9h4c2 0 4 2 4 4v5H3v-6c0-2 2-4 4-4h3l4-8z" fill="#2458d8" />
@@ -880,7 +914,7 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
               Dispositivo GPS
             </div>
           )}
-          {stops.length === 0 && (
+          {activeStops.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/70 p-6 text-center text-xs font-bold text-[#6B665F]">
               {emptyMessage}
             </div>
@@ -894,7 +928,7 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
               Salida fija: San Felipe del Progreso Centro
             </p>
             <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-[#6B665F]">
-              <span>Paradas: <b className="text-[#2D2D2A]">{stops.length}</b></span>
+              <span>Paradas: <b className="text-[#2D2D2A]">{activeStops.length}</b></span>
               <span>Completadas: <b className="text-[#2D2D2A]">{completedStopIds.length}</b></span>
               <span>Piezas: <b className="text-[#2D2D2A]">{load}</b></span>
               <span>Costo: <b className="text-[#2D2D2A]">${Math.round(plannedKm * COST_PER_KM).toLocaleString("es-MX")}</b></span>
@@ -938,6 +972,31 @@ export default function RouteOptimizationMap(props: RouteOptimizationMapProps) {
                       {activeStop?.id === stop.id && !completedStopIds.includes(stop.id) && (
                         <p className="mt-1 text-[9px] font-black uppercase text-[#5A6A42]">Listo para realizar parada</p>
                       )}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDiscardedStopIds((current) => Array.from(new Set([...current, stop.id])));
+                            setIsRunning(false);
+                            setIsAtStop(false);
+                          }}
+                          className="rounded-md border border-[#D7D1C7] bg-white px-2 py-1 text-[9px] font-black uppercase text-[#6B665F] transition hover:bg-[#EFEDE7]"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDiscardedStopIds((current) => Array.from(new Set([...current, stop.id])));
+                            setCompletedStopIds((current) => current.filter((id) => id !== stop.id));
+                            setIsRunning(false);
+                            setIsAtStop(false);
+                          }}
+                          className="rounded-md bg-[#A44A3F] px-2 py-1 text-[9px] font-black uppercase text-white transition hover:bg-[#7f332c]"
+                        >
+                          Borrar
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
