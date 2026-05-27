@@ -1,5 +1,5 @@
-import React, { FormEvent } from "react";
-import { Building2, Gauge, Lock, Package, ShieldCheck, Trash2, Users } from "lucide-react";
+import React, { FormEvent, useState } from "react";
+import { Building2, Edit3, Gauge, Lock, Package, Save, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import { Cooperative, Order, Product, Profile } from "../types";
 
 interface AdminViewProps {
@@ -13,6 +13,7 @@ interface AdminViewProps {
   onSensor: (event: FormEvent) => void;
   onAnchor: (productId: string) => void;
   onDeleteProduct: (product: Product) => void;
+  onUpdateProduct: (product: Product, input: Record<string, unknown>) => void;
   onDeleteProfile: (profile: Profile) => void;
   onDeleteCooperative: (cooperative: Cooperative) => void;
 }
@@ -28,6 +29,7 @@ export default function AdminView({
   onSensor,
   onAnchor,
   onDeleteProduct,
+  onUpdateProduct,
   onDeleteProfile,
   onDeleteCooperative,
 }: AdminViewProps) {
@@ -107,6 +109,8 @@ export default function AdminView({
                     key={product.id}
                     title={product.name}
                     meta={`${product.status.toUpperCase()} · ${product.stock} en stock`}
+                    product={product}
+                    onUpdate={onUpdateProduct}
                     onDelete={() => onDeleteProduct(product)}
                   />
                 ))}
@@ -254,30 +258,146 @@ function AdminList({
 function AdminRow({
   title,
   meta,
+  product,
   disabled,
+  onUpdate,
   onDelete,
 }: {
   key?: React.Key;
   title: string;
   meta: string;
+  product?: Product;
   disabled?: boolean;
+  onUpdate?: (product: Product, input: Record<string, unknown>) => void;
   onDelete: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    name: product?.name || "",
+    category: product?.category || "",
+    price: product?.price ? String(product.price) : "",
+    stock: product?.stock !== undefined ? String(product.stock) : "",
+    status: product?.status || "pending",
+    image: product?.image || "",
+    materials: product?.materials?.join(", ") || "",
+    description: product?.description || "",
+  });
+
+  function saveEdit() {
+    if (!product || !onUpdate || !form.name.trim() || !form.category.trim() || Number(form.price) <= 0 || Number(form.stock) < 0) return;
+    onUpdate(product, {
+      name: form.name.trim(),
+      category: form.category.trim(),
+      price: Number(form.price),
+      stock: Number(form.stock),
+      status: form.status as Product["status"],
+      image: form.image.trim(),
+      materials: form.materials,
+      description: form.description.trim(),
+    });
+    setEditing(false);
+  }
+
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-[#E6E2DA] bg-white px-2.5 py-2">
-      <div className="min-w-0">
-        <p className="truncate text-xs font-bold text-[#2D2D2A]">{title}</p>
-        <p className="truncate text-[10px] text-[#6B665F]">{meta}</p>
+    <div className="rounded-lg border border-[#E6E2DA] bg-white px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-bold text-[#2D2D2A]">{title}</p>
+          <p className="truncate text-[10px] text-[#6B665F]">{meta}</p>
+        </div>
+        <div className="flex flex-shrink-0 gap-1">
+          {product && onUpdate && (
+            <button
+              type="button"
+              onClick={() => setEditing((value) => !value)}
+              title={editing ? "Cancelar edición" : "Editar"}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#E6E2DA] bg-[#FAF8F5] text-[#5A6A42] transition-colors hover:bg-white cursor-pointer"
+            >
+              {editing ? <X className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={disabled}
+            title={disabled ? "No puedes eliminar tu propia cuenta" : "Eliminar"}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
-      <button
-        type="button"
-        onClick={onDelete}
-        disabled={disabled}
-        title={disabled ? "No puedes eliminar tu propia cuenta" : "Eliminar"}
-        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+
+      {editing && product && (
+        <div className="mt-2 grid gap-2 border-t border-[#E6E2DA] pt-2 text-[10px]">
+          <input
+            value={form.name}
+            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+            className="rounded-lg border border-[#E6E2DA] bg-[#FAF8F5] px-2 py-1.5 outline-none focus:border-[#C2845D]"
+            placeholder="Nombre"
+          />
+          <input
+            value={form.category}
+            onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
+            className="rounded-lg border border-[#E6E2DA] bg-[#FAF8F5] px-2 py-1.5 outline-none focus:border-[#C2845D]"
+            placeholder="Categoría"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="number"
+              min="1"
+              value={form.price}
+              onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))}
+              className="rounded-lg border border-[#E6E2DA] bg-[#FAF8F5] px-2 py-1.5 outline-none focus:border-[#C2845D]"
+              placeholder="Precio"
+            />
+            <input
+              type="number"
+              min="0"
+              value={form.stock}
+              onChange={(event) => setForm((prev) => ({ ...prev, stock: event.target.value }))}
+              className="rounded-lg border border-[#E6E2DA] bg-[#FAF8F5] px-2 py-1.5 outline-none focus:border-[#C2845D]"
+              placeholder="Stock"
+            />
+          </div>
+          <select
+            value={form.status}
+            onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))}
+            className="rounded-lg border border-[#E6E2DA] bg-[#FAF8F5] px-2 py-1.5 outline-none focus:border-[#C2845D]"
+          >
+            <option value="pending">Pendiente</option>
+            <option value="verified">Verificado</option>
+            <option value="archived">Archivado</option>
+          </select>
+          <input
+            value={form.materials}
+            onChange={(event) => setForm((prev) => ({ ...prev, materials: event.target.value }))}
+            className="rounded-lg border border-[#E6E2DA] bg-[#FAF8F5] px-2 py-1.5 outline-none focus:border-[#C2845D]"
+            placeholder="Materiales separados por coma"
+          />
+          <input
+            value={form.image}
+            onChange={(event) => setForm((prev) => ({ ...prev, image: event.target.value }))}
+            className="rounded-lg border border-[#E6E2DA] bg-[#FAF8F5] px-2 py-1.5 outline-none focus:border-[#C2845D]"
+            placeholder="URL de imagen"
+          />
+          <textarea
+            value={form.description}
+            rows={2}
+            onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+            className="rounded-lg border border-[#E6E2DA] bg-[#FAF8F5] px-2 py-1.5 outline-none focus:border-[#C2845D]"
+            placeholder="Descripción"
+          />
+          <button
+            type="button"
+            onClick={saveEdit}
+            className="inline-flex items-center justify-center gap-1 rounded-lg bg-[#5A6A42] px-3 py-1.5 text-[10px] font-bold uppercase text-white hover:bg-[#2D2D2A] cursor-pointer"
+          >
+            <Save className="h-3.5 w-3.5" />
+            Guardar cambios
+          </button>
+        </div>
+      )}
     </div>
   );
 }

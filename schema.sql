@@ -59,12 +59,35 @@ create table if not exists public.orders (
   shipping_state text,
   shipping_postal_code text,
   shipping_notes text,
+  shipping_latitude numeric,
+  shipping_longitude numeric,
+  gps_device_name text,
   fulfillment_status text not null default 'pending',
   stripe_checkout_session_id text unique,
   stripe_payment_intent_id text,
   created_at timestamptz not null default now(),
   paid_at timestamptz
 );
+
+alter table if exists public.cooperatives
+  add column if not exists latitude numeric,
+  add column if not exists longitude numeric,
+  add column if not exists gps_device_name text;
+
+alter table if exists public.producers
+  add column if not exists address text,
+  add column if not exists latitude numeric,
+  add column if not exists longitude numeric;
+
+alter table if exists public.products
+  add column if not exists pickup_address text,
+  add column if not exists latitude numeric,
+  add column if not exists longitude numeric;
+
+alter table if exists public.orders
+  add column if not exists shipping_latitude numeric,
+  add column if not exists shipping_longitude numeric,
+  add column if not exists gps_device_name text;
 
 create table if not exists public.order_items (
   id uuid primary key default gen_random_uuid(),

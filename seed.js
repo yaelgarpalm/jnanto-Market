@@ -47,7 +47,10 @@ async function runSeed() {
       municipality: "San Felipe del Progreso",
       community: "San Pedro el Alto",
       representative: "María Juana Hernández",
-      phone: "7121234567"
+      phone: "7121234567",
+      latitude: 19.7269,
+      longitude: -99.9724,
+      gps_device_name: "Dispositivo GPS Coop Norte"
     },
     {
       id: "coop-2",
@@ -55,7 +58,10 @@ async function runSeed() {
       municipality: "Ixtlahuaca",
       community: "San Andrés del Pedregal",
       representative: "Juana Gómez Ruiz",
-      phone: "7129876543"
+      phone: "7129876543",
+      latitude: 19.5858,
+      longitude: -99.7747,
+      gps_device_name: "Dispositivo GPS Coop Centro"
     },
     {
       id: "coop-3",
@@ -63,7 +69,10 @@ async function runSeed() {
       municipality: "San Felipe del Progreso",
       community: "San Francisco Tepeolulco",
       representative: "Pedro Mateo",
-      phone: "7124567890"
+      phone: "7124567890",
+      latitude: 19.795,
+      longitude: -99.9618,
+      gps_device_name: "Dispositivo GPS Coop Alfareros"
     }
   ];
   await supabase.from("cooperatives").insert(cooperatives);
@@ -77,7 +86,10 @@ async function runSeed() {
       community: "San Pedro el Alto",
       cooperative_id: "coop-1",
       description: "Artesana especialista en bordado hilvanado tradicional y telar de cintura.",
-      verified: true
+      verified: true,
+      address: "San Pedro el Alto, San Felipe del Progreso, Estado de Mexico",
+      latitude: 19.7281,
+      longitude: -99.9741
     },
     {
       id: "prod-2",
@@ -85,7 +97,10 @@ async function runSeed() {
       community: "San Andrés del Pedregal",
       cooperative_id: "coop-2",
       description: "Tejedora tradicional experta en lana cruda teñida con plantas locales y fajas tradicionales.",
-      verified: true
+      verified: true,
+      address: "San Andrés del Pedregal, Ixtlahuaca, Estado de Mexico",
+      latitude: 19.5872,
+      longitude: -99.7785
     },
     {
       id: "prod-3",
@@ -93,7 +108,10 @@ async function runSeed() {
       community: "San Francisco Tepeolulco",
       cooperative_id: "coop-3",
       description: "Maestro alfarero especializado en floreros y platos de barro bruñido con piedra de río.",
-      verified: true
+      verified: true,
+      address: "San Francisco Tepeolulco, San Felipe del Progreso, Estado de Mexico",
+      latitude: 19.7932,
+      longitude: -99.9631
     }
   ];
   await supabase.from("producers").insert(producers);
@@ -115,6 +133,9 @@ async function runSeed() {
       cooperative_id: "coop-1",
       cooperative_name: "Mujeres Bordadoras del Norte",
       image: "https://images.unsplash.com/photo-1594235412907-9cce44531af8?auto=format&fit=crop&q=80&w=900",
+      pickup_address: "Taller de María Juana Hernández, San Pedro el Alto, San Felipe del Progreso",
+      latitude: 19.7281,
+      longitude: -99.9741,
       stock: 5,
       status: "verified",
       trace_code: "JNATJO-BLUSA-001",
@@ -141,6 +162,9 @@ async function runSeed() {
       cooperative_id: "coop-2",
       cooperative_name: "Artesanos del Centro Mazahua",
       image: "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&q=80&w=900",
+      pickup_address: "Taller de Juana Gómez Ruiz, San Andrés del Pedregal, Ixtlahuaca",
+      latitude: 19.5872,
+      longitude: -99.7785,
       stock: 8,
       status: "verified",
       trace_code: "JNATJO-MUNECA-002",
@@ -167,6 +191,9 @@ async function runSeed() {
       cooperative_id: "coop-3",
       cooperative_name: "Alfareros Unidos de San Felipe",
       image: "https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?auto=format&fit=crop&q=80&w=900",
+      pickup_address: "Taller de Pedro Mateo, San Francisco Tepeolulco, San Felipe del Progreso",
+      latitude: 19.7932,
+      longitude: -99.9631,
       stock: 3,
       status: "verified",
       trace_code: "JNATJO-BARRO-003",
