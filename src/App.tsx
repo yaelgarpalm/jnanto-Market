@@ -24,6 +24,7 @@ import Navbar, { NavNotification } from "./components/Navbar";
 import AuthPanel from "./components/AuthPanel";
 import CartPanel from "./components/CartPanel";
 import TraceModal from "./components/TraceModal";
+import RouteOptimizationMap from "./components/RouteOptimizationMap";
 
 // Views
 import MarketplaceView from "./views/MarketplaceView";
@@ -980,6 +981,19 @@ export default function App() {
     }
   }
 
+  async function updateAdminProduct(product: Product, input: Record<string, unknown>) {
+    try {
+      await api<Product>(`/api/admin/products/${product.id}`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+      });
+      setAuthMessage("Producto actualizado correctamente.");
+      await Promise.all([loadPublicData(), loadPrivateData()]);
+    } catch (error) {
+      setAuthMessage(getFriendlyError(error, "No se pudo editar el producto."));
+    }
+  }
+
   async function deleteAdminProfile(targetProfile: Profile) {
     if (!window.confirm(`¿Eliminar la cuenta de ${targetProfile.full_name}? Esta acción borra el acceso del usuario.`)) return;
     try {
@@ -1195,7 +1209,7 @@ export default function App() {
 
       <main
         className={`mx-auto my-0 bg-white px-4 py-8 shadow-[0_28px_90px_rgba(0,0,0,0.18)] sm:my-8 sm:px-8 xl:px-10 ${
-          tab === "account" || tab === "cart" ? "max-w-[760px]" : "max-w-[1320px]"
+          tab === "account" ? "max-w-[760px]" : tab === "cart" ? "max-w-[1120px]" : "max-w-[1320px]"
         }`}
       >
         <section className="space-y-6 animate-slide-up" key={tab}>
@@ -1238,7 +1252,7 @@ export default function App() {
           )}
 
           {tab === "cart" && (
-            <div className="mx-auto max-w-xl space-y-5">
+            <div className="mx-auto max-w-[1120px] space-y-5">
               <div>
                 <h2 className="text-3xl font-black text-[#101815]">Carrito</h2>
                 <p className="mt-2 text-sm font-medium text-[#69736d]">
@@ -1246,20 +1260,32 @@ export default function App() {
                 </p>
               </div>
               {canShop ? (
-                <CartPanel
-                  cart={cart}
-                  setCart={setCart}
-                  total={cartTotal}
-                  shippingForm={shippingForm}
-                  setShippingForm={setShippingForm}
-                  saveDeliveryInfo={saveDeliveryInfo}
-                  setSaveDeliveryInfo={setSaveDeliveryInfo}
-                  rewardBalance={rewardBalance.availablePoints}
-                  rewardDiscount={rewardDiscount}
-                  useRewardPoints={useRewardPoints}
-                  setUseRewardPoints={setUseRewardPoints}
-                  onCheckout={startCheckout}
-                />
+                <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
+                  <RouteOptimizationMap
+                    mode="customer"
+                    title="Ruta estimada hacia tu domicilio"
+                    profile={profile}
+                    products={products}
+                    producers={producers}
+                    cooperatives={cooperatives}
+                    shippingForm={shippingForm}
+                    cart={cart}
+                  />
+                  <CartPanel
+                    cart={cart}
+                    setCart={setCart}
+                    total={cartTotal}
+                    shippingForm={shippingForm}
+                    setShippingForm={setShippingForm}
+                    saveDeliveryInfo={saveDeliveryInfo}
+                    setSaveDeliveryInfo={setSaveDeliveryInfo}
+                    rewardBalance={rewardBalance.availablePoints}
+                    rewardDiscount={rewardDiscount}
+                    useRewardPoints={useRewardPoints}
+                    setUseRewardPoints={setUseRewardPoints}
+                    onCheckout={startCheckout}
+                  />
+                </div>
               ) : (
                 <div className="rounded-2xl border border-black/10 bg-[#f8f8f4] p-6 text-sm font-semibold text-[#69736d]">
                   Cambia tu perfil a Cliente para poder usar el carrito.
@@ -1278,35 +1304,57 @@ export default function App() {
           )}
 
           {tab === "producer" && (
-            <ProducerView
-              profile={profile}
-              products={products}
-              salesOrders={salesOrders}
-              producers={producers}
-              productForm={productForm}
-              setProductForm={setProductForm}
-              onCreate={createProduct}
-              onTrace={openTrace}
-              onRestock={restockProduct}
-              onImageUpload={uploadProductImages}
-              onDownloadQr={downloadProductQr}
-              onDownloadReport={downloadProducerReport}
-            />
+            <div className="space-y-5">
+              <RouteOptimizationMap
+                mode="producer"
+                title="Ruta óptima para recolectar y preparar mercancía vendida"
+                profile={profile}
+                products={products}
+                producers={producers}
+                cooperatives={cooperatives}
+                orders={salesOrders}
+              />
+              <ProducerView
+                profile={profile}
+                products={products}
+                salesOrders={salesOrders}
+                producers={producers}
+                productForm={productForm}
+                setProductForm={setProductForm}
+                onCreate={createProduct}
+                onTrace={openTrace}
+                onRestock={restockProduct}
+                onImageUpload={uploadProductImages}
+                onDownloadQr={downloadProductQr}
+                onDownloadReport={downloadProducerReport}
+              />
+            </div>
           )}
 
           {tab === "cooperative" && (
-            <CooperativeView
-              profile={profile}
-              products={products}
-              reservations={reservations}
-              onValidate={validateProduct}
-              onReservation={updateReservation}
-              onFulfillment={updateOrderFulfillment}
-              orders={orders}
-              onTrace={openTrace}
-              onDownloadQr={downloadProductQr}
-              onDownloadReport={downloadCoopReport}
-            />
+            <div className="space-y-5">
+              <RouteOptimizationMap
+                mode="cooperative"
+                title="Mejor ruta para entregar compras de la cooperativa"
+                profile={profile}
+                products={products}
+                producers={producers}
+                cooperatives={cooperatives}
+                orders={orders}
+              />
+              <CooperativeView
+                profile={profile}
+                products={products}
+                reservations={reservations}
+                onValidate={validateProduct}
+                onReservation={updateReservation}
+                onFulfillment={updateOrderFulfillment}
+                orders={orders}
+                onTrace={openTrace}
+                onDownloadQr={downloadProductQr}
+                onDownloadReport={downloadCoopReport}
+              />
+            </div>
           )}
 
           {tab === "inventory" && (
@@ -1347,6 +1395,7 @@ export default function App() {
               onSensor={addSensorReading}
               onAnchor={anchorProduct}
               onDeleteProduct={deleteAdminProduct}
+              onUpdateProduct={updateAdminProduct}
               onDeleteProfile={deleteAdminProfile}
               onDeleteCooperative={deleteAdminCooperative}
             />

@@ -423,6 +423,9 @@ function mapProduct(row: any) {
     reviewCount: typeof row.review_count === "number" ? row.review_count : undefined,
     qrPayload: row.qr_payload,
     nfcPayload: row.nfc_payload,
+    latitude: row.latitude == null ? null : Number(row.latitude),
+    longitude: row.longitude == null ? null : Number(row.longitude),
+    pickupAddress: row.pickup_address || null,
   };
 }
 
@@ -856,6 +859,71 @@ app.delete("/api/admin/products/:id", requireAuth, requireRoles(["admin"]), asyn
     const { error } = await supabase.from("products").delete().eq("id", req.params.id);
     if (error) throw error;
     res.json({ success: true, deleted: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/admin/products/:id", requireAuth, requireRoles(["admin"]), async (req: AuthedRequest, res, next) => {
+  try {
+    const { data: existing, error: existingError } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", req.params.id)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (!existing) return res.status(404).json({ error: "Producto no encontrado." });
+
+    const hasPrice = req.body.price !== undefined && req.body.price !== null && String(req.body.price).trim() !== "";
+    const hasStock = req.body.stock !== undefined && req.body.stock !== null && String(req.body.stock).trim() !== "";
+    const price = money(req.body.price);
+    const stock = money(req.body.stock);
+    const status = ["verified", "pending", "archived"].includes(req.body.status) ? req.body.status : existing.status;
+    const nextBreakdown = {
+      ...(existing.breakdown || {}),
+      materialsCost: money(existing.materials_cost),
+      laborCost: money(existing.labor_cost),
+      communityFund: money(existing.community_fund),
+      platformCommission: money(existing.platform_commission),
+    };
+
+    const update = {
+      name: assertString(req.body.name, existing.name),
+      description: assertString(req.body.description, existing.description || ""),
+      category: assertString(req.body.category, existing.category),
+      price: hasPrice && price > 0 ? price : money(existing.price),
+      materials: assertString(req.body.materials, existing.materials || ""),
+      image: assertString(req.body.image, existing.image || ""),
+      stock: hasStock ? Math.max(stock, 0) : money(existing.stock),
+      status,
+      breakdown: nextBreakdown,
+    };
+
+    const { data, error } = await supabase
+      .from("products")
+      .update(update)
+      .eq("id", req.params.id)
+      .select("*, product_images(*)")
+      .single();
+    if (error) throw error;
+
+    await insertTraceabilityStage({
+      productId: req.params.id,
+      stageKey: "admin_update",
+      stageLabel: "Producto actualizado",
+      description: `${req.profile!.full_name} actualizo la ficha del producto desde administracion.`,
+      responsible: req.profile!.full_name,
+      payload: {
+        fields: Object.keys(update),
+        status,
+        stock: update.stock,
+        price: update.price,
+      },
+      userId: req.user!.id,
+    });
+
+    const [row] = await attachProductReviews([data]);
+    res.json(mapProduct(row));
   } catch (error) {
     next(error);
   }
@@ -1533,6 +1601,8 @@ app.post("/api/checkout/session", requireAuth, async (req: AuthedRequest, res, n
     const shippingState = assertString(shipping.state);
     const shippingPostalCode = assertString(shipping.postalCode);
     const shippingNotes = assertString(shipping.notes);
+    const shippingLatitude = Number(shipping.latitude);
+    const shippingLongitude = Number(shipping.longitude);
 
     if (!shippingName || !shippingPhone || !shippingAddress || !shippingCity || !shippingState || !shippingPostalCode) {
       return res.status(400).json({ error: "Completa nombre, telefono, direccion, ciudad, estado y codigo postal de entrega." });
@@ -1597,6 +1667,9 @@ app.post("/api/checkout/session", requireAuth, async (req: AuthedRequest, res, n
         shipping_state: shippingState,
         shipping_postal_code: shippingPostalCode,
         shipping_notes: shippingNotes,
+        shipping_latitude: Number.isFinite(shippingLatitude) ? shippingLatitude : null,
+        shipping_longitude: Number.isFinite(shippingLongitude) ? shippingLongitude : null,
+        gps_device_name: assertString(shipping.gpsDeviceName, "Dispositivo GPS de reparto"),
         fulfillment_status: "pending",
       })
       .select("*")

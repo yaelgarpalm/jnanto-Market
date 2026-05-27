@@ -25,6 +25,9 @@ export interface Cooperative {
   community: string;
   representative: string;
   phone?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  gps_device_name?: string | null;
 }
 
 export interface Producer {
@@ -36,6 +39,9 @@ export interface Producer {
   description?: string;
   verified: boolean;
   avatar?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
 }
 
 export interface PriceBreakdown {
@@ -76,6 +82,9 @@ export interface Product {
   qrPayload?: string;
   nfcPayload?: string;
   associatedResources?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+  pickupAddress?: string | null;
 }
 
 export interface TraceabilityStage {
@@ -123,6 +132,9 @@ export interface Order {
   shipping_state?: string | null;
   shipping_postal_code?: string | null;
   shipping_notes?: string | null;
+  shipping_latitude?: number | null;
+  shipping_longitude?: number | null;
+  gps_device_name?: string | null;
   created_at: string;
   order_items?: OrderItem[];
   reward_points?: number;
