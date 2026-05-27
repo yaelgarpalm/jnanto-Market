@@ -30,6 +30,11 @@ export default function CooperativeView({
   const isCoopOrStaff = Boolean(profile && ["cooperative", "verifier", "inventory_manager", "admin"].includes(profile.role));
   const pending = products.filter((item) => item.status === "pending");
   const paidOrders = orders.filter((order) => ["paid", "shipped", "delivered"].includes(order.status));
+  const fulfillmentLabels = {
+    preparing: "Preparar",
+    shipped: "Enviar",
+    delivered: "Entregado",
+  } as const;
 
   return (
     <div className="grid gap-5 xl:grid-cols-2">
@@ -157,17 +162,25 @@ export default function CooperativeView({
                     ))}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[#E6E2DA]/50 pt-2">
-                    {(["preparing", "shipped", "delivered", "cancelled"] as const).map((status) => (
+                    {(["preparing", "shipped", "delivered"] as const).map((status) => (
                       <button
                         key={status}
                         type="button"
                         onClick={() => onFulfillment(order.id, status)}
-                        disabled={!isCoopOrStaff}
+                        disabled={!isCoopOrStaff || order.fulfillment_status === "cancelled"}
                         className="rounded-lg border border-[#E6E2DA] bg-white px-2.5 py-1 text-[9px] font-bold uppercase text-[#6B665F] hover:bg-[#2D2D2A] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                       >
-                        {status}
+                        {fulfillmentLabels[status]}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => onFulfillment(order.id, "cancelled")}
+                      disabled={!isCoopOrStaff || ["delivered", "cancelled"].includes(order.fulfillment_status || "")}
+                      className="rounded-lg bg-[#A44A3F] px-2.5 py-1 text-[9px] font-bold uppercase text-white hover:bg-[#7f332c] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      Cancelar pedido
+                    </button>
                   </div>
                 </div>
               ))
